@@ -1,0 +1,398 @@
+先講結論：你想做的是「**系統性把現代深度學習整棟大樓走一遍，再請 Claude Code 當私人家教 + 助教帶你實作**」。超級合理，但範圍超大，我幫你做到三件事：
+
+1. 給你一張「深度學習模型技術地圖」＋代表論文出處
+2. 幫你寫好一個「丟給 Claude Code 的超長提示詞（prompt）」，讓它變成你的深度學習導師
+3. 告訴你我整理這些東西的來源 & 再加上怎麼善用你 32 threads CPU + RTX 5080 16GB
+
+下面我會盡量濃縮，但資訊會很紮實，你可以慢慢消化。
+
+---
+
+## 1. 深度學習主要模型與技術「大地圖」＋代表出處
+
+> 先說白話：不可能真的列出「所有」模型（變種太多），
+> 我會列出 **主幹類別 + 經典代表模型 + 對應論文**，
+> 你只要把這些家族搞懂，你跟大多數 DL 工程師站在同一層樓。
+
+另外也有幾篇最近的 survey 幫你掌握全貌，例如 2024–2025 的深度學習綜述、LLM 綜述，這些都是你之後可以直接去翻的「導覽圖」([ScienceDirect][1])。
+
+### 1.1 傳統類神經網路基礎
+
+* **Perceptron / 多層感知機 (MLP)**
+
+  * 核心概念：線性組合 + 非線性激活；堆很多層就是深度網路。
+  * **Backpropagation**（誤差反向傳播）是訓練這些網路的關鍵演算法。
+  * 系統化整理可以看 *Goodfellow, Bengio, Courville – Deep Learning* 教科書（DL Bible）([Deep Learning Book][2])。
+
+* **重要訓練技巧（橫跨所有模型）**
+
+  * 最佳化：SGD、Momentum、RMSProp、Adam 等
+  * 正則化：L2、Dropout、早停、資料增強
+  * 穩定訓練技巧：Batch Normalization、Layer Normalization、Residual Connection 等([CommLab][3])
+
+這些是你後面學 CNN / Transformer / GAN 都會重複用到的「通用招式」。
+
+---
+
+### 1.2 卷積神經網路 CNN（主要打：影像 / 影片 / 部分語音）
+
+**家族核心概念**：
+
+* 使用卷積（local + weight sharing）來擷取空間特徵，適合影像、語音等「有局部結構」的資料。
+
+**代表模型 & 論文：**
+
+1. **LeNet-5** – 手寫數字辨識，CNN 的早期代表
+
+   * *Y. LeCun et al., “Gradient-Based Learning Applied to Document Recognition”, 1998*([Stanford Vision][4])
+
+2. **AlexNet** – ImageNet 大戰的轉折點（2012）
+
+   * *Krizhevsky et al., “ImageNet Classification with Deep Convolutional Neural Networks”*([NeurIPS Proceedings][5])
+
+3. **VGG、GoogLeNet (Inception)** – 更深、更細緻的架構設計（堆很深的 3×3 conv、Inception module）
+
+4. **ResNet** – 引入 Residual Connection，解掉深網梯度問題
+
+   * *He et al., “Deep Residual Learning for Image Recognition”, 2015/2016*([arXiv][6])
+
+5. **UNet / FCN** – 影像語義分割任務常用架構
+
+6. **ConvNeXt 之類的 modern CNN** – 融合部分 Transformer 設計，但本質還是 CNN。
+
+---
+
+### 1.3 序列模型：RNN 家族 → Attention → Transformer
+
+**RNN 的時代：**
+
+1. **Elman / Jordan RNN**
+
+   * 概念：把前一時刻 hidden state 帶到下一步，能處理序列，但會有梯度消失/爆炸問題。
+
+2. **LSTM** – 解決長期依賴
+
+   * *Hochreiter & Schmidhuber, “Long Short-Term Memory”, 1997*([Institute of Bioinformatics][7])
+
+3. **GRU** – LSTM 的簡化版
+
+   * Cho et al., 2014（GRU 原始論文）
+
+4. **Seq2Seq + Attention** – 對機器翻譯 / 序列轉序列任務非常重要
+
+   * Bahdanau et al. 2014 attention（之後被 Transformer 大幅發揚光大）。
+
+**Transformer 的時代：**
+
+5. **Transformer** – 完全捨棄 RNN/CNN，只用注意力機制
+
+   * *Vaswani et al., “Attention is All You Need”, 2017*([arXiv][8])
+
+6. **BERT** – 雙向 Transformer encoder，用 mask LM 預訓練
+
+   * *Devlin et al., “BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding”, 2018/2019*([arXiv][9])
+
+7. **GPT 系列** – 自回歸 decoder-only Transformer，主攻生成
+
+   * GPT-1/2/3 原始論文 + 後續 GPT-4、GPT-4o 等商用模型（可透過 LLM survey 理解整體脈絡）([arXiv][10])
+
+8. **Vision Transformer (ViT)** – 把影像切成 patch 當 token 餵 Transformer
+
+   * *Dosovitskiy et al., “An Image is Worth 16×16 Words: Transformers for Image Recognition at Scale”*([arXiv][11])
+
+---
+
+### 1.4 自編碼器與機率模型：AE / VAE / RBM / DBN
+
+1. **Autoencoder (AE)** – encoder 把輸入壓縮成 latent，decoder 重建。
+
+   * 用於降維、特徵學習、去雜訊（Denoising AE）等。
+
+2. **Variational Autoencoder (VAE)** – 把 AE 變成有嚴謹機率意義的生成模型
+
+   * *Kingma & Welling, “Auto-Encoding Variational Bayes”, 2013*([arXiv][12])
+
+3. **Restricted Boltzmann Machine (RBM)、Deep Belief Network (DBN)**
+
+   * 比較「前 Transformer 時代」的深度生成模型，可在 DL 教科書裡看到完整介紹([CommLab][3])。
+
+---
+
+### 1.5 生成模型：GAN / 自回歸 / 流式 / Diffusion 等
+
+1. **GAN（Generative Adversarial Network）**
+
+   * 兩個網路對抗：Generator vs Discriminator。
+   * *Goodfellow et al., “Generative Adversarial Nets”, 2014*([arXiv][13])
+
+   很多變種：DCGAN、WGAN(-GP)、StyleGAN、CycleGAN 等。
+
+2. **VAE** – 上一節提過，是生成模型家族之一。
+
+3. **自回歸圖像模型**：PixelRNN / PixelCNN、WaveNet（語音）等等。
+
+4. **Flow-based Models**：RealNVP、Glow – 可逆變換，對 log-likelihood 有封閉形式。
+
+5. **Diffusion Models（擴散模型）**
+
+   * 核心想法：一步步把 noise 變成圖。
+   * *Ho et al., “Denoising Diffusion Probabilistic Models (DDPM)”, 2020*([arXiv][14])
+
+   現在很多影像生成（如 Stable Diffusion）都是這一類。
+
+---
+
+### 1.6 自監督學習 / 對比學習 / 表徵學習
+
+1. **對比學習 (Contrastive Learning)** – 代表：**SimCLR**
+
+   * *Ting Chen et al., “A Simple Framework for Contrastive Learning of Visual Representations”, 2020*([arXiv][15])
+
+2. **Mask LM / Mask Image 等預訓練**
+
+   * NLP：BERT 的 Masked Language Modeling（上一節提過）
+   * CV：MAE (Masked Autoencoder)、BEiT 等（可從 2024 DL survey 中看到整理）([MDPI][16])
+
+---
+
+### 1.7 圖神經網路 GNN（圖資料：社交網路、知識圖譜…）
+
+1. **GCN (Graph Convolutional Network)**
+
+   * *Kipf & Welling, “Semi-Supervised Classification with Graph Convolutional Networks”, 2016/ICLR 2017*([arXiv][17])
+
+2. **GAT (Graph Attention Network)**
+
+   * *Veličković et al., “Graph Attention Networks”, 2017/ICLR 2018*([arXiv][18])
+
+3. **GraphSAGE 等** – 用 sampling 做大型圖上的 inductive learning。
+
+---
+
+### 1.8 深度強化學習（簡略點出）
+
+* **DQN** – Deep Q-Network，Atari 遊戲的里程碑
+* **Policy Gradient / Actor–Critic / A3C / PPO** – 控制、策略學習
+* **AlphaGo / AlphaZero 系列** – 結合 MCTS + 深度網路
+
+這塊你現在需求比較是「文字 / 圖像 / 影像」，DRL 可以放後面，有空再請 Claude 開一門選修即可。
+
+---
+
+### 1.9 LLM & Multimodal Foundation Models
+
+這一塊你之後會跟 Claude、我這種模型打交道最多。
+
+1. **LLM 綜述**
+
+   * 2023 *Zhao et al., “A Survey of Large Language Models”*([arXiv][19])
+   * 2024 *Minaee et al., “Large Language Models: A Survey”*([arXiv][10])
+
+   這些 survey 有系統整理 GPT、PaLM、LLaMA、Qwen、Gemini 等各大家族。
+
+2. **Efficient / Memory-Efficient LLM**
+
+   * 針對模型壓縮、量化、LoRA、記憶體優化等有專門 survey，例如 Efficient LLMs Survey（TMLR 2024）([GitHub][20])
+
+3. **Multimodal Models**
+
+   * 圖文（CLIP）、圖文生成（DALL·E 系列）、視覺語言模型、語音 + 文本模型等，很多都基於 Transformer 或 Diffusion 延伸，細節可從 2024 DL/LLM survey 裡查到脈絡([MDPI][16])。
+
+---
+
+
+## 3. 怎麼有效利用你的 32 threads CPU + RTX 5080 16GB
+
+再怎麼帥的模型，跑不起來都白搭。你這台機器的層級 roughly 是 **中高階單機**，可以做的事很多，但**不要幻想自己要從零訓練 70B 模型**，那是資料中心等級的事。
+
+### 3.1 一般訓練原則
+
+1. **所有 model / tensor 盡量上 GPU：**
+
+```python
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+x = x.to(device)
+```
+
+PyTorch 官方 CUDA 說明文檔有詳細語意([PyTorch Documentation][21])。
+
+2. **CPU 主要拿來：**
+
+   * 資料前處理（讀檔、解壓、圖像轉換）
+   * DataLoader，多進程加速 I/O
+
+   `DataLoader(num_workers=8~16, pin_memory=True)` 對你 32 threads CPU 很適合（具體再看實測）。
+
+3. **Mixed Precision（自動混合精度）必學：**
+
+   * 用 `torch.autocast` + `GradScaler` 可以節省 VRAM、加速訓練。
+   * 這是官方推薦做法，有完整教學與範例([PyTorch Documentation][22])。
+
+   大致訓練 loop 會長這樣：
+
+```python
+scaler = torch.cuda.amp.GradScaler()
+
+for x, y in dataloader:
+    x, y = x.to(device), y.to(device)
+    optimizer.zero_grad()
+    with torch.cuda.amp.autocast():
+        preds = model(x)
+        loss = criterion(preds, y)
+    scaler.scale(loss).backward()
+    scaler.step(optimizer)
+    scaler.update()
+```
+
+4. **Batch size / Gradient Accumulation：**
+
+   * 如果遇到「CUDA out of memory」，先：
+
+     * 降低 `batch_size`
+     * 或使用 gradient accumulation（小 batch 跑 N 次再 step 一次）
+   * Hugging Face 也有在 single-GPU 效能調校文件中提到 gradient checkpointing / accumulation 的 trade-off([Hugging Face][23])。
+
+5. **使用 `torch.compile`（若你是 PyTorch 2.x）：**
+
+   * 可以自動對模型做編譯優化，加速推理與訓練([PyTorch Documentation][24])。
+
+```python
+model = MyModel().to(device)
+model = torch.compile(model)
+```
+
+---
+
+### 3.2 模型大小與你的顯卡：現實一點的範圍
+
+粗估（非常粗，但足夠幫你定方向）：
+
+* **16GB VRAM + FP16 / BF16 + 量化 (4bit) + LoRA：**
+
+  * 推理：跑 7B 級模型沒問題，13B 勉強（看實作與 context 長度）。
+  * 微調：LoRA 微調 1–7B 級模型是合理目標（例如 LLaMA-2 7B 之類），全參數微調 7B 在 16GB 上會非常痛苦甚至不太可行。
+
+* **影像模型：**
+
+  * ResNet-50 / ViT-Base 等等，在 16GB 上訓練中等尺寸 dataset 很 OK。
+  * 如果你要玩小型 Diffusion 模型，建議也是從小 resolution / 小模型開始。
+
+總之：
+
+> 策略不是「我要訓練最大」，而是「我要在這個硬體上玩到**盡量多種類型的模型**，把原理吃透」。
+
+---
+
+## 4. 我整理這些東西的來源（你要做「徹底研究」時可深挖）
+
+你如果想「學到像在修研究所課」，以下是推薦路線 & 來源：
+
+### 4.1 教科書／入門主幹
+
+* **Goodfellow, Bengio, Courville – *Deep Learning***
+
+  * 免費線上版，系統化介紹深度學習理論與經典模型([Deep Learning Book][2])。
+
+### 4.2 深度學習歷史與綜述
+
+* 2025 歷史評論：*Ekundayo, “Deep learning: Historical overview from inception to …”*([ScienceDirect][1])
+* 2024 綜述：*Mienye et al., “A Comprehensive Review of Deep Learning: Architectures, Recent Advances and Applications”*([MDPI][16])
+* 2025 fundamentals survey：*Tian, “A survey on deep learning fundamentals”*([SpringerLink][25])
+
+這幾篇會把 CNN / RNN / Transformer / GAN / GNN / Diffusion 等整理得很完整。
+
+### 4.3 個別核心模型的原始論文
+
+舉幾個最重要的，你之後可以照著去讀（至少看 abstract + figure）：
+
+* **CNN**
+
+  * LeNet：LeCun et al., 1998 – Gradient-Based Learning Applied to Document Recognition([Stanford Vision][4])
+  * AlexNet：Krizhevsky et al., 2012 – ImageNet Classification with Deep CNNs([NeurIPS Proceedings][5])
+  * ResNet：He et al., 2015/2016 – Deep Residual Learning for Image Recognition([arXiv][6])
+
+* **序列 / Transformer / NLP**
+
+  * LSTM：Hochreiter & Schmidhuber, 1997 – Long Short-Term Memory([Institute of Bioinformatics][7])
+  * Transformer：Vaswani et al., 2017 – Attention Is All You Need([arXiv][8])
+  * BERT：Devlin et al., 2018/2019 – BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding([arXiv][9])
+
+* **生成模型**
+
+  * GAN：Goodfellow et al., 2014 – Generative Adversarial Nets([arXiv][13])
+  * VAE：Kingma & Welling, 2013 – Auto-Encoding Variational Bayes([arXiv][12])
+  * Diffusion：Ho et al., 2020 – Denoising Diffusion Probabilistic Models([arXiv][14])
+
+* **自監督 / 對比學習**
+
+  * SimCLR：Chen et al., 2020 – A Simple Framework for Contrastive Learning of Visual Representations([arXiv][15])
+
+* **GNN**
+
+  * GCN：Kipf & Welling, 2016 – Semi-Supervised Classification with Graph Convolutional Networks([arXiv][17])
+  * GAT：Veličković et al., 2017 – Graph Attention Networks([arXiv][18])
+
+* **Vision Transformer**
+
+  * Dosovitskiy et al., 2020/ICLR 2021 – An Image is Worth 16×16 Words: Transformers for Image Recognition at Scale([arXiv][11])
+
+* **LLM 綜述與效率**
+
+  * Zhao et al., 2023 – A Survey of Large Language Models([arXiv][19])
+  * Minaee et al., 2024 – Large Language Models: A Survey([arXiv][10])
+  * Efficient / Memory-efficient Transformer & LLMs survey（如 Efficient-LLMs-Survey、memory-efficient transformer training）([GitHub][20])
+
+* **PyTorch & 硬體效能官方文件**
+
+  * PyTorch docs：CUDA、torch.cuda、AMP、torch.compile 等([PyTorch Documentation][21])
+  * NVIDIA / Lightning 等混合精度與效能最佳化文章([NVIDIA Docs][26])
+
+---
+
+## 5. 接下來你可以怎麼做？
+
+如果用一句話總結整個計畫：
+
+> **用我幫你整理的地圖，+ 我寫好的 Claude Code 超長 prompt，
+> 然後你就跟著它一個 Module 一個 Module 打怪，
+> 打到最後你基本上就是「實務型 DL 工程師 + 會看論文的人」。**
+
+你下一步可以：
+
+1. 先把上面的 **Claude 提示詞** 整段貼給 Claude Code。
+2. 讓它從 Module 0 開始，帶你檢查環境，寫第一個簡單的 GPU 線性回歸 / MNIST 範例。
+3. 遇到任何困惑（數學、程式、效能），再回來問我，我可以：
+
+   * 幫你拆解某篇論文在講什麼
+   * 幫你看 Claude 給你的 code 有沒有更好的寫法
+   * 跟你一起規劃「我要先專精 NLP 還是 CV 還是生成模型」
+
+如果你願意，下一回合你也可以直接貼「Claude 幫你排出來的學習計畫表」，我可以幫你調整課綱，避免繞遠路。
+
+[1]: https://www.sciencedirect.com/science/article/pii/S1568494625006891?utm_source=chatgpt.com "Deep learning: Historical overview from inception to ..."
+[2]: https://www.deeplearningbook.org/?utm_source=chatgpt.com "Deep Learning Book"
+[3]: https://mcube.lab.nycu.edu.tw/~cfung/docs/books/goodfellow2016deep_learning.pdf?utm_source=chatgpt.com "Deep Learning"
+[4]: https://vision.stanford.edu/cs598_spring07/papers/Lecun98.pdf?utm_source=chatgpt.com "Gradient-Based Learning Applied to Document Recognition"
+[5]: https://proceedings.neurips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks.pdf?utm_source=chatgpt.com "ImageNet Classification with Deep Convolutional Neural ..."
+[6]: https://arxiv.org/abs/1512.03385?utm_source=chatgpt.com "Deep Residual Learning for Image Recognition"
+[7]: https://www.bioinf.jku.at/publications/older/2604.pdf?utm_source=chatgpt.com "LONG SHORT-TERM MEMORY 1 INTRODUCTION"
+[8]: https://arxiv.org/abs/1706.03762?utm_source=chatgpt.com "Attention Is All You Need"
+[9]: https://arxiv.org/abs/1810.04805?utm_source=chatgpt.com "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+[10]: https://arxiv.org/abs/2402.06196?utm_source=chatgpt.com "[2402.06196] Large Language Models: A Survey"
+[11]: https://arxiv.org/abs/2010.11929?utm_source=chatgpt.com "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale"
+[12]: https://arxiv.org/abs/1312.6114?utm_source=chatgpt.com "Auto-Encoding Variational Bayes"
+[13]: https://arxiv.org/abs/1406.2661?utm_source=chatgpt.com "Generative Adversarial Networks"
+[14]: https://arxiv.org/abs/2006.11239?utm_source=chatgpt.com "[2006.11239] Denoising Diffusion Probabilistic Models"
+[15]: https://arxiv.org/abs/2002.05709?utm_source=chatgpt.com "A Simple Framework for Contrastive Learning of Visual Representations"
+[16]: https://www.mdpi.com/2078-2489/15/12/755?utm_source=chatgpt.com "A Comprehensive Review of Deep Learning: Architectures ..."
+[17]: https://arxiv.org/abs/1609.02907?utm_source=chatgpt.com "Semi-Supervised Classification with Graph Convolutional Networks"
+[18]: https://arxiv.org/abs/1710.10903?utm_source=chatgpt.com "Graph Attention Networks"
+[19]: https://arxiv.org/abs/2303.18223?utm_source=chatgpt.com "[2303.18223] A Survey of Large Language Models"
+[20]: https://github.com/AIoT-MLSys-Lab/Efficient-LLMs-Survey?utm_source=chatgpt.com "[TMLR 2024] Efficient Large Language Models: A Survey"
+[21]: https://docs.pytorch.org/docs/stable/notes/cuda.html?utm_source=chatgpt.com "CUDA semantics — PyTorch 2.9 documentation"
+[22]: https://docs.pytorch.org/docs/stable/notes/amp_examples.html?utm_source=chatgpt.com "Automatic Mixed Precision examples"
+[23]: https://huggingface.co/docs/transformers/v4.42.0/perf_train_gpu_one?utm_source=chatgpt.com "Methods and tools for efficient training on a single GPU"
+[24]: https://docs.pytorch.org/tutorials/intermediate/torch_compile_tutorial.html?utm_source=chatgpt.com "Introduction to torch.compile"
+[25]: https://link.springer.com/article/10.1007/s10462-025-11368-7?utm_source=chatgpt.com "A survey on deep learning fundamentals"
+[26]: https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html?utm_source=chatgpt.com "Train With Mixed Precision"
